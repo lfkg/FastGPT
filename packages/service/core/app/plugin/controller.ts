@@ -270,6 +270,8 @@ export async function getChildAppPreviewNode({
     }
   })();
 
+  // console.log('getSystemPluginByIdAndVersionId', pluginId, versionId, app, app.workflow.nodes[0]);
+
   const { flowNodeType, nodeIOConfig } = await (async (): Promise<{
     flowNodeType: FlowNodeTypeEnum;
     nodeIOConfig: {

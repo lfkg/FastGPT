@@ -83,8 +83,7 @@ export const useNodeTemplates = () => {
       if (type === TemplateTypeEnum.teamPlugin) {
         // app, workflow-plugin, mcp
         return getTeamPlugTemplates({
-          parentId,
-          searchKey: searchVal
+          parentId
         }).then((res) => res.filter((app) => app.id !== appId));
       }
       if (type === TemplateTypeEnum.systemPlugin) {
