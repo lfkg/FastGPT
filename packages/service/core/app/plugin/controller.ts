@@ -171,8 +171,6 @@ export async function getChildAppPreviewNode({
     // 1. App
     // 2. MCP ToolSets
     if (source === PluginSourceEnum.personal) {
-      // 1. App
-      // 2. MCP ToolSets
       const item = await MongoApp.findById(pluginId).lean();
       if (!item) return Promise.reject(PluginErrEnum.unExist);
 
