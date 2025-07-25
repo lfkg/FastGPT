@@ -171,6 +171,8 @@ export async function getChildAppPreviewNode({
     // 1. App
     // 2. MCP ToolSets
     if (source === PluginSourceEnum.personal) {
+      // 1. App
+      // 2. MCP ToolSets
       const item = await MongoApp.findById(pluginId).lean();
       if (!item) return Promise.reject(PluginErrEnum.unExist);
 
@@ -196,7 +198,8 @@ export async function getChildAppPreviewNode({
       }
 
       return {
-        id: String(item._id),
+        id:
+          item.type === AppTypeEnum.toolSet && node.toolConfig?.mcpToolSet ? '' : String(item._id),
         teamId: String(item.teamId),
         name: item.name,
         avatar: item.avatar,
@@ -460,6 +463,30 @@ export async function getChildAppRuntimeById({
     edges: app.workflow.edges,
     hasTokenFee: app.hasTokenFee
   };
+}
+
+export async function getSystemPluginRuntimeNodeById(
+  pluginId: string
+): Promise<RuntimeNodeItemType> {
+  const { source } = splitCombinePluginId(pluginId);
+  if (source === PluginSourceEnum.systemTool) {
+    const tool = await getSystemPluginByIdAndVersionId(pluginId);
+    return {
+      ...tool,
+      name: parseI18nString(tool.name),
+      intro: parseI18nString(tool.intro),
+      inputs: tool.inputs ?? [],
+      outputs: tool.outputs ?? [],
+      flowNodeType: FlowNodeTypeEnum.tool,
+      nodeId: getNanoid(),
+      toolConfig: {
+        systemTool: {
+          toolId: pluginId
+        }
+      }
+    };
+  }
+  return Promise.reject(PluginErrEnum.unExist);
 }
 
 const dbPluginFormat = (item: SystemPluginConfigSchemaType): SystemPluginTemplateItemType => {
