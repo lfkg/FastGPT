@@ -436,6 +436,7 @@ export const iconPaths = {
   'model/sparkDesk': () => import('./icons/model/sparkDesk.svg'),
   'model/stepfun': () => import('./icons/model/stepfun.svg'),
   'model/yi': () => import('./icons/model/yi.svg'),
+  // 'model/aicp': () => import('./icons/model/aicp.svg'),
   more: () => import('./icons/more.svg'),
   moreLine: () => import('./icons/moreLine.svg'),
   out: () => import('./icons/out.svg'),

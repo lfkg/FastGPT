@@ -1,0 +1,14 @@
+configmap:
+  name: fastgpt-config
+
+deployment:
+  image:
+    repository: mirrors.sangfor.com/labring/fastgpt
+    tag: v4.9.9
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+
+service:
+  type: NodePort
+  port: 31300
+  targetPort: 3000

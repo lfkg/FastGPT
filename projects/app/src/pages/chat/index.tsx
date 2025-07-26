@@ -259,7 +259,7 @@ const Chat = ({ myApps }: { myApps: AppListItemType[] }) => {
                     appId={appId}
                     chatId={chatId}
                     outLinkAuthData={outLinkAuthData}
-                    showEmptyIntro
+                    showEmptyIntro={false}
                     feedbackType={'user'}
                     onStartChat={onStartChat}
                     chatType={ChatTypeEnum.chat}
