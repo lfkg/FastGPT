@@ -14,7 +14,7 @@ import json5 from 'json5';
     可以根据上下文，消除指代性问题以及扩展问题，利于检索。
 */
 
-const title = global.feConfigs?.systemTitle || 'FastAI';
+const title = global.feConfigs?.systemTitle || 'FastGPT';
 const defaultPrompt = `## 你的任务
 你作为一个向量检索助手，你的任务是结合历史记录，从不同角度，为“原问题”生成个不同版本的“检索词”，从而提高向量检索的语义丰富度，提高向量检索的精度。
 生成的问题要求指向对象清晰明确，并与“原问题语言相同”。

@@ -451,6 +451,7 @@ export const iconPaths = {
   'model/stepfun': () => import('./icons/model/stepfun.svg'),
   'model/vertexai': () => import('./icons/model/vertexai.svg'),
   'model/yi': () => import('./icons/model/yi.svg'),
+  // 'model/aicp': () => import('./icons/model/aicp.svg'),
   more: () => import('./icons/more.svg'),
   moreLine: () => import('./icons/moreLine.svg'),
   optimizer: () => import('./icons/optimizer.svg'),

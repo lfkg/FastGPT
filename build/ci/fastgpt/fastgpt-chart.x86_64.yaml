@@ -1,0 +1,14 @@
+buildName: fastgpt
+
+buildDocker: auto
+
+artifacts:
+  - fastgpt.chart
+
+refPaths:
+  chart: deployments/chart/values.yaml
+
+argsInRefFiles:
+  chart:
+    IMAGE_REPO: $current.fastgpt.image.url
+    IMAGE_TAG: $current.fastgpt.image.version

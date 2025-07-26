@@ -54,18 +54,48 @@ const Chat = ({ myApps }: { myApps: AppListItemType[] }) => {
       )}
 
       {(!datasetCiteData || isPc) && (
-        <PageContainer flex="1 0 0" w={0} position="relative">
-          {/* home chat window */}
-          {pane === ChatSidebarPaneEnum.HOME && <HomeChatWindow myApps={myApps} />}
+        <PageContainer flex={'1 0 0'} w={0} position={'relative'}>
+          <Flex h={'100%'} flexDirection={['column', 'row']}>
+            {/* pc always show history */}
+            {RenderHistorySlider}
+            <Flex
+              position={'relative'}
+              h={[0, '100%']}
+              w={['100%', 0]}
+              flex={'1 0 0'}
+              flexDirection={'column'}
+            >
+              <ChatHeader
+                totalRecordsCount={totalRecordsCount}
+                apps={myApps}
+                history={chatRecords}
+                showHistory
+              />
 
-          {/* recently used apps chat window */}
-          {pane === ChatSidebarPaneEnum.RECENTLY_USED_APPS && <AppChatWindow myApps={myApps} />}
-
-          {/* team apps */}
-          {pane === ChatSidebarPaneEnum.TEAM_APPS && <ChatTeamApp />}
-
-          {/* setting */}
-          {pane === ChatSidebarPaneEnum.SETTING && <ChatSetting />}
+              <Box flex={'1 0 0'} bg={'white'}>
+                {isPlugin ? (
+                  <CustomPluginRunBox
+                    appId={appId}
+                    chatId={chatId}
+                    outLinkAuthData={outLinkAuthData}
+                    onNewChat={() => onChangeChatId(getNanoid())}
+                    onStartChat={onStartChat}
+                  />
+                ) : (
+                  <ChatBox
+                    appId={appId}
+                    chatId={chatId}
+                    outLinkAuthData={outLinkAuthData}
+                    showEmptyIntro={false}
+                    feedbackType={'user'}
+                    onStartChat={onStartChat}
+                    chatType={ChatTypeEnum.chat}
+                    isReady={!loading}
+                  />
+                )}
+              </Box>
+            </Flex>
+          </Flex>
         </PageContainer>
       )}
 
