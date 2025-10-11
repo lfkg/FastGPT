@@ -11,13 +11,19 @@ import type {
   SqlResultWithDatasetId
 } from '@fastgpt/global/core/dataset/database/api';
 import type { ModuleDispatchProps } from '@fastgpt/global/core/workflow/runtime/type';
-import { getDefaultLLMModel, getEmbeddingModel, getRerankModel } from '../../../ai/model';
+import {
+  getDefaultLLMModel,
+  getEmbeddingModel,
+  getLLMModel,
+  getRerankModel
+} from '../../../ai/model';
 import {
   deepRagSearch,
   defaultSearchDatasetData,
   SearchDatabaseData,
   generateAndExecuteSQL
 } from '../../../dataset/search/controller';
+import { calculateDynamicLimit } from '../../../dataset/search/utils';
 import type { NodeInputKeyEnum, NodeOutputKeyEnum } from '@fastgpt/global/core/workflow/constants';
 import { DispatchNodeResponseKeyEnum } from '@fastgpt/global/core/workflow/runtime/constants';
 import { DatasetSearchModeEnum, DatasetTypeEnum } from '@fastgpt/global/core/dataset/constants';
@@ -29,6 +35,7 @@ import { filterDatasetsByTmbId } from '../../../dataset/utils';
 import { ModelTypeEnum } from '@fastgpt/global/core/ai/model';
 import { getDatasetSearchToolResponsePrompt } from '../../../../../global/core/ai/prompt/dataset';
 import { getNodeErrResponse } from '../utils';
+import { get } from 'lodash';
 
 type DatasetSearchProps = ModuleDispatchProps<{
   [NodeInputKeyEnum.datasetSelectList]: SelectedDatasetType;
@@ -186,6 +193,23 @@ export async function dispatchDatasetSearch(
     };
     // Database search for database datasets - search each dataset individually and generate SQL
     if (databaseDatasetIds.length > 0) {
+      const sqlLLM = getLLMModel(generateSqlModel);
+      if (!sqlLLM) {
+        addLog.error(`Invalid LLM model specified for SQL generation ${generateSqlModel}`);
+        return Promise.reject(`Invalid LLM model specified for SQL generation ${generateSqlModel}`);
+      }
+      // Calculate dynamic limit based on generateSqlModel's maxContext
+      const dynamicLimit = calculateDynamicLimit({
+        generateSqlModel: sqlLLM.name,
+        safetyFactor: 0.6,
+        estimatedTokensPerItem: 1024 // Assume each item may consume around 1000 tokens after formatting
+      });
+
+      addLog.debug('Dataset Search - Using dynamic limit for database search', {
+        generateSqlModel: sqlLLM.name,
+        calculatedLimit: dynamicLimit
+      });
+
       // Process each database dataset sequentially
       await Promise.all(
         datasetIds.map(async (datasetId) => {
@@ -194,7 +218,7 @@ export async function dispatchDatasetSearch(
             teamId,
             queries: [userChatInput],
             model: vectorModel.model,
-            limit: 50,
+            limit: dynamicLimit,
             datasetIds: [datasetId]
           });
           if (singleResult) {
@@ -206,8 +230,16 @@ export async function dispatchDatasetSearch(
                 schema: singleResult.schema,
                 teamId,
                 limit,
-                generate_sql_llm: { model: generateSqlModel || getDefaultLLMModel().name },
-                evaluate_sql_llm: { model: generateSqlModel || getDefaultLLMModel().name }
+                generate_sql_llm: {
+                  model: sqlLLM.model,
+                  api_key: sqlLLM.requestAuth || undefined,
+                  base_url: sqlLLM.requestUrl?.replace(/(chat\/completions.*)$/, '') || undefined
+                },
+                evaluate_sql_llm: {
+                  model: sqlLLM.model,
+                  api_key: sqlLLM.requestAuth || undefined,
+                  base_url: sqlLLM.requestUrl?.replace(/(chat\/completions.*)$/, '') || undefined
+                }
               });
 
               if (singleSqlResult) {
