@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ModalBody,
   Box,
@@ -18,6 +18,7 @@ import MyIcon from '@fastgpt/web/components/common/Icon';
 import FormLabel from '@fastgpt/web/components/common/MyBox/FormLabel';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'next-i18next';
+import MyTooltip from '@fastgpt/web/components/common/MyTooltip';
 import MyModal from '@fastgpt/web/components/common/MyModal/index';
 import ModifyEvaluationModal from './ModifyEvaluationModal';
 import { evaluationStatusMap, EvaluationStatus } from './const';
@@ -90,6 +91,11 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
   );
 
   const [errorMsg, setErrorMsg] = useState(formData.qualityMetadata?.error || '');
+  const [hasDataChanged, setHasDataChanged] = useState(false);
+  const [lastSavedData, setLastSavedData] = useState<EditDataFormData>({
+    question: defaultQuestion,
+    referenceAnswer: defaultReferenceAnswer
+  });
 
   const [reviewBtns, setReviewBtns] = useState<ReviewBtnType[]>([
     {
@@ -158,49 +164,70 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
 
   // 新增保存请求，用于重测前的数据保存
   const { runAsync: saveBeforeRetest, loading: isSavingBeforeRetest } = useRequest2(
-    async (data: EditDataFormData) =>
-      updateEvaluationDatasetData({
+    async (data: EditDataFormData) => {
+      const result = await updateEvaluationDatasetData({
         dataId: formData._id,
         userInput: data.question,
         expectedOutput: data.referenceAnswer
-      }),
+      });
+
+      // 保存成功后，更新最后保存的数据状态
+      setLastSavedData({
+        question: data.question,
+        referenceAnswer: data.referenceAnswer
+      });
+
+      return result;
+    },
     {
       errorToast: t('common:submit_failed')
     }
   );
-
   // 重测按钮的loading状态
   const retestLoading = useMemo(() => {
     return isEvaluating || isSavingBeforeRetest;
   }, [isEvaluating, isSavingBeforeRetest]);
 
   // 轮询获取数据详情 - 在评测中或排队中时才轮询
-  const { runAsync: getDetail } = useRequest2(() => getEvaluationDatasetDataDetail(formData._id), {
-    pollingInterval: 3000,
-    pollingWhenHidden: false,
-    manual: true,
-    ready: isOpen,
-    onSuccess: (data: any) => {
-      if (data?.qualityMetadata?.status !== currentEvaluationStatus) {
-        const newStatus =
-          data?.qualityMetadata?.status || EvalDatasetDataQualityStatusEnum.unevaluated;
-        const newQualityResult = data?.qualityResult || '';
-        setCurrentEvaluationStatus(newStatus);
-        setCurrentQualityReason(data?.qualityMetadata?.reason || '');
-        setCurrentQualityResult(newQualityResult);
-        updateButtonsByStatus(newStatus, newQualityResult);
-        newStatus === EvalDatasetDataQualityStatusEnum.error &&
-          setErrorMsg(data?.qualityMetadata?.error);
+  const { runAsync: getDetail, cancel } = useRequest2(
+    () => getEvaluationDatasetDataDetail(formData._id),
+    {
+      pollingInterval: 3000,
+      pollingWhenHidden: false,
+      manual: true,
+      ready: isOpen,
+      onSuccess: (data: any) => {
+        if (data?.qualityMetadata?.status !== currentEvaluationStatus) {
+          const newStatus =
+            data?.qualityMetadata?.status || EvalDatasetDataQualityStatusEnum.unevaluated;
+          const newQualityResult = data?.qualityResult || '';
+          setCurrentEvaluationStatus(newStatus);
+          setCurrentQualityReason(data?.qualityMetadata?.reason || '');
+          setCurrentQualityResult(newQualityResult);
+          updateButtonsByStatus(newStatus, newQualityResult);
+          newStatus === EvalDatasetDataQualityStatusEnum.error &&
+            setErrorMsg(data?.qualityMetadata?.error);
+        }
+
+        // 非评估中、排队中状态停止轮询
+        if (
+          !(
+            data?.qualityMetadata?.status == EvalDatasetDataQualityStatusEnum.evaluating ||
+            data?.qualityMetadata?.status === EvalDatasetDataQualityStatusEnum.queuing
+          )
+        ) {
+          cancel();
+        }
       }
     }
-  });
-
+  );
   const {
     register,
     handleSubmit,
     formState: { errors },
     getValues,
-    reset
+    reset,
+    watch
   } = useForm<EditDataFormData>({
     defaultValues: {
       question: defaultQuestion,
@@ -208,6 +235,14 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
     }
   });
 
+  // 监听表单变化，检查数据是否被修改
+  const watchedValues = watch();
+
+  useEffect(() => {
+    const questionChanged = watchedValues.question !== lastSavedData.question;
+    const answerChanged = watchedValues.referenceAnswer !== lastSavedData.referenceAnswer;
+    setHasDataChanged(questionChanged || answerChanged);
+  }, [watchedValues, lastSavedData.question, lastSavedData.referenceAnswer]);
   // 当弹窗打开时重置表单数据
   React.useEffect(() => {
     if (isOpen) {
@@ -215,10 +250,17 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
         question: defaultQuestion,
         referenceAnswer: defaultReferenceAnswer
       });
+      cancel();
       setCurrentEvaluationStatus(evaluationStatus);
       setCurrentQualityReason(qualityReason);
       setCurrentQualityResult(formData?.qualityResult || '');
       setErrorMsg(formData.qualityMetadata?.error || '');
+
+      // 重置最后保存的数据状态
+      setLastSavedData({
+        question: defaultQuestion,
+        referenceAnswer: defaultReferenceAnswer
+      });
 
       // 根据评测状态设置按钮显示状态
       updateButtonsByStatus(evaluationStatus, formData?.qualityResult);
@@ -231,11 +273,10 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
       }
     }
   }, [isOpen, defaultQuestion, defaultReferenceAnswer, evaluationStatus, qualityReason]);
-
   const handleSaveClick = (data: EditDataFormData, isGoNext = false) => {
     // 检查是否修改了问题或参考答案
-    const hasQuestionChanged = data.question !== defaultQuestion;
-    const hasAnswerChanged = data.referenceAnswer !== defaultReferenceAnswer;
+    const hasQuestionChanged = data.question !== lastSavedData.question;
+    const hasAnswerChanged = data.referenceAnswer !== lastSavedData.referenceAnswer;
 
     let saveData;
     if (hasQuestionChanged || hasAnswerChanged) {
@@ -441,11 +482,6 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
         // 获取当前表单数据
         const currentFormData = getValues();
 
-        // 检查数据是否发生变化
-        const hasDataChanged =
-          currentFormData.question !== defaultQuestion ||
-          currentFormData.referenceAnswer !== defaultReferenceAnswer;
-
         if (hasDataChanged) {
           // 如果数据发生变化，先保存再重测
           await saveBeforeRetest(currentFormData);
@@ -481,11 +517,10 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
               <VStack spacing={6} align="stretch">
                 <FormControl isRequired>
                   <FormLabel required mt={1.5} mb={3.5}>
-                    {t('dashboard_evaluation:question')}
+                    {t('dashboard_evaluation:question_input_label')}
                   </FormLabel>
                   <Textarea
                     placeholder={t('dashboard_evaluation:enter_question')}
-                    bg="gray.50"
                     minH="234px"
                     {...register('question', {
                       required: t('dashboard_evaluation:question_required')
@@ -499,7 +534,6 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
                   </FormLabel>
                   <Textarea
                     placeholder={t('dashboard_evaluation:enter_reference_answer')}
-                    bg="gray.50"
                     minH="234px"
                     {...register('referenceAnswer', {
                       required: t('dashboard_evaluation:reference_answer_required')
@@ -521,25 +555,53 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
                     <HStack ml={'auto'}>
                       {reviewBtns
                         .filter((btn) => btn.isShow)
-                        .map((btn, index) => (
-                          <Button
-                            key={btn.key}
-                            fontSize={'12px'}
-                            px={2.5}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault(); // 阻止默认行为
-                              handleOprRes(btn.key);
-                            }}
-                            variant="outline"
-                            isLoading={
-                              retestLoading && (btn.key === 'startReview' || btn.key === 'reStart')
-                            }
-                            disabled={retestLoading}
-                          >
-                            {btn.label}
-                          </Button>
-                        ))}
+                        .map((btn, index) => {
+                          // 对于重新评测按钮，添加提示
+                          if (btn.key === 'reStart' && hasDataChanged) {
+                            return (
+                              <MyTooltip
+                                key={btn.key}
+                                label={t('dashboard_evaluation:data_updated_before_retest')}
+                              >
+                                <Button
+                                  fontSize={'12px'}
+                                  px={2.5}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault(); // 阻止默认行为
+                                    handleOprRes(btn.key);
+                                  }}
+                                  variant="outline"
+                                  isLoading={retestLoading}
+                                  disabled={retestLoading}
+                                >
+                                  {btn.label}
+                                </Button>
+                              </MyTooltip>
+                            );
+                          }
+
+                          return (
+                            <Button
+                              key={btn.key}
+                              fontSize={'12px'}
+                              px={2.5}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault(); // 阻止默认行为
+                                handleOprRes(btn.key);
+                              }}
+                              variant="outline"
+                              isLoading={
+                                retestLoading &&
+                                (btn.key === 'startReview' || btn.key === 'reStart')
+                              }
+                              disabled={retestLoading}
+                            >
+                              {btn.label}
+                            </Button>
+                          );
+                        })}
                     </HStack>
                   )}
               </Flex>
@@ -593,9 +655,9 @@ const EditDataModal: React.FC<EditDataModalProps> = ({
         defaultValues={{
           evaluationStatus:
             currentQualityResult === EvalDatasetDataQualityResultEnum.highQuality
-              ? EvaluationStatus.HighQuality
-              : EvaluationStatus.NeedsImprovement,
-          evaluationResult: currentQualityReason
+              ? EvaluationStatus.NeedsImprovement
+              : EvaluationStatus.HighQuality,
+          evaluationResult: ''
         }}
       />
     </>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Box,
   Flex,
@@ -62,6 +62,7 @@ const Header = ({ hasTrainingData }: { hasTrainingData: boolean }) => {
   const { isPc } = useSystem();
 
   const datasetDetail = useContextSelector(DatasetPageContext, (v) => v.datasetDetail);
+  const isDatabase = useContextSelector(DatasetPageContext, (v) => v.isDatabaseType);
 
   const router = useRouter();
   const { parentId = '' } = router.query as { parentId: string };
@@ -171,6 +172,14 @@ const Header = ({ hasTrainingData }: { hasTrainingData: boolean }) => {
     }
   };
 
+  const titleLabel = useMemo(
+    () =>
+      isDatabase
+        ? t('dataset:database_tables')
+        : t(DatasetTypeMap[datasetDetail?.type]?.collectionLabel as any),
+    [isDatabase, t, datasetDetail?.type]
+  );
+
   const handleRefreshDataSource = async () => {
     try {
       const result = await onDetectDatabaseChanges();
@@ -183,10 +192,8 @@ const Header = ({ hasTrainingData }: { hasTrainingData: boolean }) => {
             <AlertIcon w={6} h={6} />
             <Box flex={1} color={'myGray.900'}>
               <AlertTitle fontWeight={'md'}>{t('dataset:refresh_success')}</AlertTitle>
-              <AlertDescription fontSize={'14px'}>
-                {!(result.summary.modifiedTables > 0 || result.summary.deletedTables > 0) ? (
-                  t('dataset:no_data_changes')
-                ) : (
+              {(result.summary.modifiedTables > 0 || result.summary.deletedTables > 0) && (
+                <AlertDescription fontSize={'14px'}>
                   <Box>
                     {getTips(result)}
                     <Button
@@ -203,11 +210,10 @@ const Header = ({ hasTrainingData }: { hasTrainingData: boolean }) => {
                       {t('dataset:config')}
                     </Button>
                   </Box>
-                )}
-              </AlertDescription>
+                </AlertDescription>
+              )}
             </Box>
             <CloseButton
-              alignSelf="flex-start"
               position="relative"
               color={'black'}
               right={-1}
@@ -233,7 +239,6 @@ const Header = ({ hasTrainingData }: { hasTrainingData: boolean }) => {
               </AlertDescription>
             </Box>
             <CloseButton
-              alignSelf="flex-start"
               position="relative"
               color={'black'}
               right={-1}
@@ -247,7 +252,6 @@ const Header = ({ hasTrainingData }: { hasTrainingData: boolean }) => {
   };
 
   const isWebSite = datasetDetail?.type === DatasetTypeEnum.websiteDataset;
-  const isDatabase = datasetDetail?.type === DatasetTypeEnum.database;
 
   const showHeaderTagPopOver = React.useMemo(
     () =>
@@ -281,7 +285,7 @@ const Header = ({ hasTrainingData }: { hasTrainingData: boolean }) => {
               >
                 <Flex align={'center'}>
                   {!isWebSite && <MyIcon name="common/list" mr={2} w={'20px'} color={'black'} />}
-                  {t(DatasetTypeMap[datasetDetail?.type]?.collectionLabel as any)}({total})
+                  {titleLabel}({total})
                 </Flex>
                 {/* Website sync */}
                 {datasetDetail?.websiteConfig?.url && (

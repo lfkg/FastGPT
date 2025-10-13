@@ -9,6 +9,7 @@ import { ChatItemContext } from '@/web/core/chat/context/chatItemContext';
 import { useRequest2 } from '@fastgpt/web/hooks/useRequest';
 import { useChatStore } from '@/web/core/chat/context/useChatStore';
 import { getQuoteDataList } from '@/web/core/chat/api';
+import { DatasetTypeEnum } from '@fastgpt/global/core/dataset/constants';
 
 const QuoteList = React.memo(function QuoteList({
   chatItemDataId = '',
@@ -36,12 +37,22 @@ const QuoteList = React.memo(function QuoteList({
     (v) => v.showRouteToDatasetDetail
   );
 
+  const datasetDataIdList = useMemo(
+    () => rawSearch.map((item) => item.id).filter((v) => !v.includes('sql')),
+    [rawSearch]
+  );
+  const collectionIdList = useMemo(
+    () =>
+      [...new Set(rawSearch.map((item) => item.collectionId))].filter((v) => !v.includes('sql')),
+    [rawSearch]
+  );
+
   const { data: quoteList } = useRequest2(
     async () =>
       !!chatItemDataId
         ? await getQuoteDataList({
-            datasetDataIdList: rawSearch.map((item) => item.id),
-            collectionIdList: [...new Set(rawSearch.map((item) => item.collectionId))],
+            datasetDataIdList,
+            collectionIdList,
             chatItemDataId,
             appId: applicationId || appId,
             chatId: RawSourceBoxProps.chatId,

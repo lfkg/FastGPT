@@ -22,6 +22,7 @@ import { getFileIcon } from '@fastgpt/global/common/file/icon';
 import EmptyTip from '@fastgpt/web/components/common/EmptyTip';
 import { completionFinishReasonMap } from '@fastgpt/global/core/ai/constants';
 import { isEmpty } from 'lodash';
+import { DatasetTypeEnum } from '@fastgpt/global/core/dataset/constants';
 
 type sideTabItemType = {
   moduleLogo?: string;
@@ -146,6 +147,21 @@ export const WholeResponseContent = ({
     // @ts-ignore
     return t(DatasetSearchModeMap[activeModule.searchMode]?.title);
   }, [activeModule.searchMode, activeModule.sqlResult, t]);
+
+  const otherKnowledgeBaseDataList = useMemo(
+    () => (activeModule?.quoteList || []).filter((item) => !item.id.startsWith('sql')),
+    [activeModule.quoteList]
+  );
+  const hasOtherKnowledgeBase = useMemo(
+    () => otherKnowledgeBaseDataList.length > 0,
+    [otherKnowledgeBaseDataList]
+  );
+
+  const databaseDataList = useMemo(
+    () => (activeModule?.quoteList || []).filter((item) => item.id.startsWith('sql')),
+    [activeModule.quoteList]
+  );
+  const hasDatabase = useMemo(() => databaseDataList.length > 0, [databaseDataList]);
 
   return activeModule ? (
     <Box
@@ -326,17 +342,42 @@ export const WholeResponseContent = ({
         />
         <Row label={t('chat:query_extension_result')} value={`${activeModule?.extensionResult}`} />
         {activeModule.quoteList && activeModule.quoteList.length > 0 && (
-          <Row
-            label={t('chat:search_results')}
-            rawDom={
-              <QuoteList
-                chatItemDataId={dataId}
-                rawSearch={activeModule.quoteList}
-                applicationId={appId}
-                chatId={chatId}
+          <>
+            {hasDatabase && (
+              <Row
+                label={
+                  hasDatabase && hasOtherKnowledgeBase
+                    ? t('chat:database_search_results')
+                    : t('chat:search_results')
+                }
+                rawDom={
+                  <QuoteList
+                    chatItemDataId={dataId}
+                    rawSearch={databaseDataList}
+                    applicationId={appId}
+                    chatId={chatId}
+                  />
+                }
               />
-            }
-          />
+            )}
+            {hasOtherKnowledgeBase && (
+              <Row
+                label={
+                  hasDatabase && hasOtherKnowledgeBase
+                    ? t('chat:other_knowledge_base_search_results')
+                    : t('chat:search_results')
+                }
+                rawDom={
+                  <QuoteList
+                    chatItemDataId={dataId}
+                    rawSearch={otherKnowledgeBaseDataList}
+                    applicationId={appId}
+                    chatId={chatId}
+                  />
+                }
+              />
+            )}
+          </>
         )}
       </>
       {/* dataset concat */}
