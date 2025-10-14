@@ -26,8 +26,6 @@ import { authUserPer } from '@fastgpt/service/support/permission/user/auth';
 import { TeamDatasetCreatePermissionVal } from '@fastgpt/global/support/permission/user/constant';
 import { DatasetErrEnum } from '@fastgpt/global/common/error/code/dataset';
 import { MongoDatasetTraining } from '@fastgpt/service/core/dataset/training/schema';
-import { MongoDatasetCollection } from '@fastgpt/service/core/dataset/collection/schema';
-import { addDays } from 'date-fns';
 import { refreshSourceAvatar } from '@fastgpt/service/common/file/image/controller';
 import { MongoResourcePermission } from '@fastgpt/service/support/permission/schema';
 import { type DatasetSchemaType } from '@fastgpt/global/core/dataset/type';

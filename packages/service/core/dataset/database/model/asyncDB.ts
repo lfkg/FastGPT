@@ -1,4 +1,4 @@
-import { DatabaseType } from '@fastgpt/global/core/dataset/constants';
+import { DatabaseTypeEnum } from '@fastgpt/global/core/dataset/constants';
 import { DatabaseErrEnum } from '@fastgpt/global/common/error/code/database';
 import type { DatabaseConfig } from '@fastgpt/global/core/dataset/type';
 import { DBTable, TableColumn, TableForeignKey } from './dataModel';
@@ -37,7 +37,7 @@ export abstract class AsyncDB {
 
   static from_uri(config: DatabaseConfig): DataSource {
     const options: DataSourceOptions = {
-      type: config.client as any, // 'mysql' | 'postgres' | 'sqlite'
+      type: config.clientType as any, // 'mysql' | 'postgres' | 'sqlite'
       host: config.host,
       port: config.port,
       username: config.user,
@@ -104,30 +104,7 @@ export abstract class AsyncDB {
   }
 
   /*-----------------------Dynamic Introspection Methods-----------------------*/
-  async get_all_table_names(): Promise<Array<string>> {
-    if (!this.db.isInitialized) {
-      await this.db.initialize();
-    }
-    const queryRunner = this.db.createQueryRunner();
-    // try-finally to ensure the queryRunner is released
-    try {
-      // 获取当前数据库名
-      const dbName = this.db.options.database;
-
-      // 查询所有表名
-      const tables: { TABLE_NAME: string }[] = await queryRunner.query(
-        `SELECT TABLE_NAME
-             FROM information_schema.tables
-             WHERE table_schema = ?
-               AND TABLE_TYPE = 'BASE TABLE'`,
-        [dbName]
-      );
-
-      return tables.map((t) => t.TABLE_NAME);
-    } finally {
-      await queryRunner.release();
-    }
-  }
+  abstract get_all_table_names(): Promise<Array<string>>;
 
   async init_db_schema(): Promise<void> {
     this.db_server_info = await this.get_db_server_info();
@@ -149,11 +126,11 @@ export abstract class AsyncDB {
   }
 
   protected getProtectedTableName(tableName: string): string {
-    switch (this.config.client) {
-      case DatabaseType.mysql:
-      case DatabaseType.sqlite:
+    switch (this.config.clientType) {
+      case DatabaseTypeEnum.mysql:
+      case DatabaseTypeEnum.sqlite:
         return `\`${tableName}\``;
-      case DatabaseType.postgresql:
+      case DatabaseTypeEnum.postgresql:
         return `"${tableName}"`;
       default:
         return tableName;
@@ -161,18 +138,18 @@ export abstract class AsyncDB {
   }
 
   protected getProtectedColName(columnName: string): string {
-    switch (this.config.client) {
-      case DatabaseType.mysql:
-      case DatabaseType.sqlite:
+    switch (this.config.clientType) {
+      case DatabaseTypeEnum.mysql:
+      case DatabaseTypeEnum.sqlite:
         return `\`${columnName}\``;
-      case DatabaseType.postgresql:
+      case DatabaseTypeEnum.postgresql:
         return `"${columnName}"`;
       default:
         return columnName;
     }
   }
 
-  async aget_table_info(tableName: string, getExamples: boolean = false): Promise<DBTable> {
+  async get_table_info(tableName: string, getExamples: boolean = false): Promise<DBTable> {
     if (!this.db.isInitialized) {
       await this.db.initialize();
     }
@@ -196,24 +173,21 @@ export abstract class AsyncDB {
                     SELECT DISTINCT ${this.getProtectedColName(col.name)}
                     FROM ${this.getProtectedTableName(tableName)}
                     WHERE ${this.getProtectedColName(col.name)} IS NOT NULL
-                        LIMIT ${this.sample_value_num + 1}
+                        LIMIT ${this.sample_value_num}
                 `;
 
           try {
             const result = await queryRunner.query(sql);
 
-            const rawExamples: any[] = [];
-
             for (const row of result) {
               const value = row[col.name];
               if (value !== null && value !== undefined) {
                 const strValue = truncateText(convertValueToString(value), this.max_string_length);
-                rawExamples.push(strValue);
+                examples.push(strValue);
               }
             }
 
-            if (isStringType(col.type as ColumnType) && rawExamples.length > 0) valueIndex = true;
-            examples = rawExamples.slice(0, this.sample_value_num);
+            if (isStringType(col.type as ColumnType) && examples.length > 0) valueIndex = true;
           } catch (error) {
             console.warn(`获取列 ${col.name} 的示例数据失败:`, error);
             examples = [];
@@ -231,11 +205,11 @@ export abstract class AsyncDB {
           col.default ?? null,
           col.isGenerated,
           col.isPrimary,
-          table.foreignKeys.some((fk) => fk.columnNames.includes(col.name)),
+          table.foreignKeys.some((fk) => fk.columnNames.includes(col.name)), // isForeignKey
           table.foreignKeys
             ?.filter((fk) => fk.columnNames.includes(col.name))
             .map((fk) => fk.referencedColumnNames)
-            .flat()
+            .flat() // relatedColumns
         );
         columns.set(col.name, tableColumn);
       }

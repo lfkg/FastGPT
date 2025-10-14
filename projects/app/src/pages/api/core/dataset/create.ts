@@ -59,11 +59,11 @@ async function handler(
 
   // check model valid
   const vectorModelStore = getEmbeddingModel(vectorModel);
-  const agentModelStore = getLLMModel(agentModel);
+  const agentModelStore = type == DatasetTypeEnum.database ? undefined : getLLMModel(agentModel);
   if (!vectorModelStore) {
     return Promise.reject(`System not embedding model`);
   }
-  if (!agentModelStore && type !== DatasetTypeEnum.database) {
+  if (!agentModelStore) {
     return Promise.reject(`System not llm model`);
   }
 
