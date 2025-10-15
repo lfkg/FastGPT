@@ -37,7 +37,7 @@ export abstract class AsyncDB {
 
   static from_uri(config: DatabaseConfig): DataSource {
     const options: DataSourceOptions = {
-      type: config.clientType as any, // 'mysql' | 'postgres' | 'sqlite'
+      type: config.clientType as any,
       host: config.host,
       port: config.port,
       username: config.user,
@@ -124,28 +124,16 @@ export abstract class AsyncDB {
       await queryRunner.release();
     }
   }
-
-  protected getProtectedTableName(tableName: string): string {
+  // get protected name for sql query
+  protected getProtectedIdentifier(identifier: string): string {
     switch (this.config.clientType) {
       case DatabaseTypeEnum.mysql:
       case DatabaseTypeEnum.sqlite:
-        return `\`${tableName}\``;
+        return `\`${identifier}\``;
       case DatabaseTypeEnum.postgresql:
-        return `"${tableName}"`;
+        return `"${identifier}"`;
       default:
-        return tableName;
-    }
-  }
-
-  protected getProtectedColName(columnName: string): string {
-    switch (this.config.clientType) {
-      case DatabaseTypeEnum.mysql:
-      case DatabaseTypeEnum.sqlite:
-        return `\`${columnName}\``;
-      case DatabaseTypeEnum.postgresql:
-        return `"${columnName}"`;
-      default:
-        return columnName;
+        return identifier;
     }
   }
 
@@ -170,9 +158,9 @@ export abstract class AsyncDB {
 
         if (getExamples) {
           const sql = `
-                    SELECT DISTINCT ${this.getProtectedColName(col.name)}
-                    FROM ${this.getProtectedTableName(tableName)}
-                    WHERE ${this.getProtectedColName(col.name)} IS NOT NULL
+                    SELECT DISTINCT ${this.getProtectedIdentifier(col.name)}
+                    FROM ${this.getProtectedIdentifier(tableName)}
+                    WHERE ${this.getProtectedIdentifier(col.name)} IS NOT NULL
                         LIMIT ${this.sample_value_num}
                 `;
 
