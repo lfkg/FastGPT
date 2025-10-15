@@ -1392,10 +1392,9 @@ export const generateAndExecuteSQL = async ({
       statusText: response.statusText,
       error: errorText
     });
-    if (response.status == 404) return Promise.reject(i18nT('chat:language_model_error'));
     const detail = JSON.parse(errorText).detail?.error;
 
-    return Promise.reject(`dative error: ${detail}`);
+    return Promise.reject(`dative error: ${detail ?? 'Request failed'}`);
   }
 
   const result: SqlGenerationResponse = await response.json();
