@@ -82,7 +82,8 @@ async function handler(
         name: file.originalname,
         type: DatasetCollectionTypeEnum.file,
         fileId,
-        trainingType: DatasetCollectionDataProcessModeEnum.template
+        trainingType: DatasetCollectionDataProcessModeEnum.template,
+        ...dataset.chunkSettings
       }
     });
 

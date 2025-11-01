@@ -8,6 +8,12 @@
   "auto_indexes": "自动生成补充索引",
   "auto_indexes_tips": "通过大模型进行额外索引生成，提高语义丰富度，提高检索的精度。",
   "auto_training_queue": "增强索引排队",
+  "small2big_indexes": "Small2Big索引增强",
+  "small2big_indexes_tips": "对Answer进行分块，将子块作为索引追加到原chunk，提高检索召回率。适用于模板导入场景。",
+  "small2big_chunk_size": "Small2Big分块大小",
+  "small2big_chunk_size_tips": "对Answer文本进行分块时的块大小，默认500字符。",
+  "small2big_max_child_chunks": "最大子块数量",
+  "small2big_max_child_chunks_tips": "限制每个Answer最多生成的子块数量，默认10个，避免存储压力过大。",
   "backup_collection": "备份数据",
   "backup_dataset": "备份导入",
   "backup_dataset_success": "备份创建成功",
@@ -342,6 +348,7 @@
    "database_table_desc_tip": "为了提高问答准确率，请准确填写数据表描述，用来解释该表的含义和用途，大模型将会根据描述识别并调用该表。",
    "database_tables": "数据表",
    "remove_warning": "移除警告",
-   "data_index_hype": "假设提示索引"
+   "data_index_hype": "假设提示索引",
+   "data_index_small2big": "Small2Big索引"
 
 }

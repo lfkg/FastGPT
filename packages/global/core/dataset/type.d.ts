@@ -39,8 +39,11 @@ export type ChunkSettingsType = {
   autoIndexes?: boolean;
   indexPrefixTitle?: boolean;
   hypeIndexes?: boolean;
+  small2bigIndexes?: boolean;
 
   hypePrompt?: String;
+  small2bigChunkSize?: number;
+  small2bigMaxChildChunks?: number;
 
   // Chunk setting
   chunkSettingMode?: ChunkSettingModeEnum; // 系统参数/自定义参数
