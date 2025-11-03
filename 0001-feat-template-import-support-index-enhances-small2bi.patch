@@ -1,0 +1,599 @@
+From 4ba69ca3db87f58cc9f119f42b75f9aa0835e7fe Mon Sep 17 00:00:00 2001
+From: "YaoJunHao(lfkg)" <17620014527@163.com>
+Date: Sat, 1 Nov 2025 10:47:15 +0800
+Subject: [PATCH] feat: template import support index enhances, small2big
+ enhance support
+
+---
+ packages/global/core/dataset/constants.ts     |   3 +-
+ .../global/core/dataset/data/constants.ts     |   7 +-
+ packages/global/core/dataset/type.d.ts        |   3 +
+ .../core/dataset/collection/controller.ts     |  40 ++-
+ .../service/core/dataset/collection/utils.ts  |  21 +-
+ packages/service/core/dataset/schema.ts       |   9 +
+ .../core/dataset/training/controller.ts       |   2 +-
+ packages/web/i18n/zh-CN/dataset.json          |   9 +-
+ .../dataset/collection/create/template.ts     |   3 +-
+ .../app/src/service/common/system/index.ts    |   1 +
+ .../core/dataset/queues/generateSmall2Big.ts  | 276 ++++++++++++++++++
+ .../service/core/dataset/training/utils.ts    |   4 +
+ projects/app/src/types/index.d.ts             |   1 +
+ 13 files changed, 358 insertions(+), 21 deletions(-)
+ create mode 100644 projects/app/src/service/core/dataset/queues/generateSmall2Big.ts
+
+diff --git a/packages/global/core/dataset/constants.ts b/packages/global/core/dataset/constants.ts
+index f3e1f56b2..88c56b42e 100644
+--- a/packages/global/core/dataset/constants.ts
++++ b/packages/global/core/dataset/constants.ts
+@@ -274,7 +274,8 @@ export enum TrainingModeEnum {
+   image = 'image',
+   imageParse = 'imageParse',
+   databaseSchema = 'databaseSchema',
+-  hype = 'hype'
++  hype = 'hype',
++  small2big = 'small2big'
+ }
+ 
+ /* ------------ search -------------- */
+diff --git a/packages/global/core/dataset/data/constants.ts b/packages/global/core/dataset/data/constants.ts
+index b7bc816ee..5767b0811 100644
+--- a/packages/global/core/dataset/data/constants.ts
++++ b/packages/global/core/dataset/data/constants.ts
+@@ -8,7 +8,8 @@ export enum DatasetDataIndexTypeEnum {
+   image = 'image',
+   column_des_index = 'column_des_index',
+   column_val_index = 'column_val_index',
+-  hype = 'hype'
++  hype = 'hype',
++  small2big = 'small2big'
+ }
+ 
+ export const DatasetDataIndexMap: Record<
+@@ -49,6 +50,10 @@ export const DatasetDataIndexMap: Record<
+   [DatasetDataIndexTypeEnum.hype]: {
+     label: i18nT('dataset:data_index_hype'),
+     color: 'teal'
++  },
++  [DatasetDataIndexTypeEnum.small2big]: {
++    label: i18nT('dataset:data_index_small2big'),
++    color: 'pink'
+   }
+ };
+ export const defaultDatasetIndexData = DatasetDataIndexMap[DatasetDataIndexTypeEnum.custom];
+diff --git a/packages/global/core/dataset/type.d.ts b/packages/global/core/dataset/type.d.ts
+index ec31f168c..77e2481dc 100644
+--- a/packages/global/core/dataset/type.d.ts
++++ b/packages/global/core/dataset/type.d.ts
+@@ -39,8 +39,11 @@ export type ChunkSettingsType = {
+   autoIndexes?: boolean;
+   indexPrefixTitle?: boolean;
+   hypeIndexes?: boolean;
++  small2bigIndexes?: boolean;
+ 
+   hypePrompt?: String;
++  small2bigChunkSize?: number;
++  small2bigMaxChildChunks?: number;
+ 
+   // Chunk setting
+   chunkSettingMode?: ChunkSettingModeEnum; // 系统参数/自定义参数
+diff --git a/packages/service/core/dataset/collection/controller.ts b/packages/service/core/dataset/collection/controller.ts
+index 5b4fe06f1..70417ebe1 100644
+--- a/packages/service/core/dataset/collection/controller.ts
++++ b/packages/service/core/dataset/collection/controller.ts
+@@ -82,7 +82,8 @@ export const createCollectionAndInsertData = async ({
+   const trainingMode = getTrainingModeByCollection({
+     trainingType: trainingType,
+     autoIndexes: formatCreateCollectionParams.autoIndexes,
+-    imageIndex: formatCreateCollectionParams.imageIndex
++    imageIndex: formatCreateCollectionParams.imageIndex,
++    small2bigIndexes: formatCreateCollectionParams.small2bigIndexes
+   });
+ 
+   if (
+@@ -94,21 +95,32 @@ export const createCollectionAndInsertData = async ({
+     delete formatCreateCollectionParams.chunkTriggerMinSize;
+     delete formatCreateCollectionParams.dataEnhanceCollectionName;
+     delete formatCreateCollectionParams.imageIndex;
++  }
++
++  if (
++    trainingType === DatasetCollectionDataProcessModeEnum.qa ||
++    trainingType === DatasetCollectionDataProcessModeEnum.backup
++  ) {
+     delete formatCreateCollectionParams.autoIndexes;
++    delete formatCreateCollectionParams.indexPrefixTitle;
++    delete formatCreateCollectionParams.hypeIndexes;
++    delete formatCreateCollectionParams.hypePrompt;
++  }
+ 
+-    if (
+-      trainingType === DatasetCollectionDataProcessModeEnum.backup ||
+-      trainingType === DatasetCollectionDataProcessModeEnum.template
+-    ) {
+-      delete formatCreateCollectionParams.paragraphChunkAIMode;
+-      delete formatCreateCollectionParams.paragraphChunkDeep;
+-      delete formatCreateCollectionParams.paragraphChunkMinSize;
+-      delete formatCreateCollectionParams.chunkSplitMode;
+-      delete formatCreateCollectionParams.chunkSize;
+-      delete formatCreateCollectionParams.chunkSplitter;
+-      delete formatCreateCollectionParams.indexSize;
+-      delete formatCreateCollectionParams.indexPrefixTitle;
+-    }
++  if (
++    trainingType === DatasetCollectionDataProcessModeEnum.backup ||
++    trainingType === DatasetCollectionDataProcessModeEnum.template
++  ) {
++    delete formatCreateCollectionParams.paragraphChunkAIMode;
++    delete formatCreateCollectionParams.paragraphChunkDeep;
++    delete formatCreateCollectionParams.paragraphChunkMinSize;
++    delete formatCreateCollectionParams.chunkSplitMode;
++    delete formatCreateCollectionParams.chunkSize;
++    delete formatCreateCollectionParams.chunkSplitter;
++  }
++
++  if (trainingType === DatasetCollectionDataProcessModeEnum.backup) {
++    delete formatCreateCollectionParams.indexSize;
+   }
+   if (trainingType !== DatasetCollectionDataProcessModeEnum.qa) {
+     delete formatCreateCollectionParams.qaPrompt;
+diff --git a/packages/service/core/dataset/collection/utils.ts b/packages/service/core/dataset/collection/utils.ts
+index 8405e4f79..b89e3c1a4 100644
+--- a/packages/service/core/dataset/collection/utils.ts
++++ b/packages/service/core/dataset/collection/utils.ts
+@@ -208,18 +208,21 @@ export const syncCollection = async (collection: CollectionWithDatasetType) => {
+   return DatasetCollectionSyncResultEnum.sameRaw;
+ };
+ 
+-/* 
++/*
+   QA: 独立进程
+   Chunk: Image Index -> Auto index -> chunk index
++  Template: Small2Big -> Auto -> chunk
+ */
+ export const getTrainingModeByCollection = ({
+   trainingType,
+   autoIndexes,
+-  imageIndex
++  imageIndex,
++  small2bigIndexes
+ }: {
+   trainingType: DatasetCollectionDataProcessModeEnum;
+   autoIndexes?: boolean;
+   imageIndex?: boolean;
++  small2bigIndexes?: boolean;
+ }) => {
+   if (
+     trainingType === DatasetCollectionDataProcessModeEnum.imageParse &&
+@@ -234,6 +237,20 @@ export const getTrainingModeByCollection = ({
+   if (trainingType === DatasetCollectionDataProcessModeEnum.databaseSchema) {
+     return TrainingModeEnum.databaseSchema;
+   }
++
++  // Template：small2big -> auto -> chunk
++  if (trainingType === DatasetCollectionDataProcessModeEnum.template) {
++    if (small2bigIndexes) {
++      return TrainingModeEnum.small2big;
++    }
++    if (autoIndexes && global.feConfigs?.isPlus) {
++      return TrainingModeEnum.auto;
++    }
++
++    return TrainingModeEnum.chunk;
++  }
++
++  // Chunk 模式的处理链：image -> auto -> chunk
+   if (
+     trainingType === DatasetCollectionDataProcessModeEnum.chunk &&
+     imageIndex &&
+diff --git a/packages/service/core/dataset/schema.ts b/packages/service/core/dataset/schema.ts
+index 20a906f7e..d4cfc3b84 100644
+--- a/packages/service/core/dataset/schema.ts
++++ b/packages/service/core/dataset/schema.ts
+@@ -35,8 +35,17 @@ export const ChunkSettings = {
+   autoIndexes: Boolean,
+   indexPrefixTitle: Boolean,
+   hypeIndexes: Boolean,
++  small2bigIndexes: Boolean,
+ 
+   hypePrompt: String,
++  small2bigChunkSize: {
++    type: Number,
++    default: 500
++  },
++  small2bigMaxChildChunks: {
++    type: Number,
++    default: 10
++  },
+ 
+   chunkSettingMode: {
+     type: String,
+diff --git a/packages/service/core/dataset/training/controller.ts b/packages/service/core/dataset/training/controller.ts
+index a2daac822..d79d5350a 100644
+--- a/packages/service/core/dataset/training/controller.ts
++++ b/packages/service/core/dataset/training/controller.ts
+@@ -51,7 +51,7 @@ export async function pushDataListToTrainingQueue({
+   }
+ 
+   const { model, maxToken, weight } = await (async () => {
+-    if (mode === TrainingModeEnum.chunk) {
++    if (mode === TrainingModeEnum.chunk || mode === TrainingModeEnum.small2big) {
+       return {
+         maxToken: Infinity,
+         model: vectorModelData.model,
+diff --git a/packages/web/i18n/zh-CN/dataset.json b/packages/web/i18n/zh-CN/dataset.json
+index 967dc5537..059a29f1a 100644
+--- a/packages/web/i18n/zh-CN/dataset.json
++++ b/packages/web/i18n/zh-CN/dataset.json
+@@ -8,6 +8,12 @@
+   "auto_indexes": "自动生成补充索引",
+   "auto_indexes_tips": "通过大模型进行额外索引生成，提高语义丰富度，提高检索的精度。",
+   "auto_training_queue": "增强索引排队",
++  "small2big_indexes": "Small2Big索引增强",
++  "small2big_indexes_tips": "对Answer进行分块，将子块作为索引追加到原chunk，提高检索召回率。适用于模板导入场景。",
++  "small2big_chunk_size": "Small2Big分块大小",
++  "small2big_chunk_size_tips": "对Answer文本进行分块时的块大小，默认500字符。",
++  "small2big_max_child_chunks": "最大子块数量",
++  "small2big_max_child_chunks_tips": "限制每个Answer最多生成的子块数量，默认10个，避免存储压力过大。",
+   "backup_collection": "备份数据",
+   "backup_dataset": "备份导入",
+   "backup_dataset_success": "备份创建成功",
+@@ -342,6 +348,7 @@
+    "database_table_desc_tip": "为了提高问答准确率，请准确填写数据表描述，用来解释该表的含义和用途，大模型将会根据描述识别并调用该表。",
+    "database_tables": "数据表",
+    "remove_warning": "移除警告",
+-   "data_index_hype": "假设提示索引"
++   "data_index_hype": "假设提示索引",
++   "data_index_small2big": "Small2Big索引"
+ 
+ }
+diff --git a/projects/app/src/pages/api/core/dataset/collection/create/template.ts b/projects/app/src/pages/api/core/dataset/collection/create/template.ts
+index 52dedb5eb..56ecfbdf5 100644
+--- a/projects/app/src/pages/api/core/dataset/collection/create/template.ts
++++ b/projects/app/src/pages/api/core/dataset/collection/create/template.ts
+@@ -82,7 +82,8 @@ async function handler(
+         name: file.originalname,
+         type: DatasetCollectionTypeEnum.file,
+         fileId,
+-        trainingType: DatasetCollectionDataProcessModeEnum.template
++        trainingType: DatasetCollectionDataProcessModeEnum.template,
++        ...dataset.chunkSettings
+       }
+     });
+ 
+diff --git a/projects/app/src/service/common/system/index.ts b/projects/app/src/service/common/system/index.ts
+index 3b106fc0f..a9b715991 100644
+--- a/projects/app/src/service/common/system/index.ts
++++ b/projects/app/src/service/common/system/index.ts
+@@ -77,6 +77,7 @@ export function initGlobalVariables() {
+   global.qaQueueLen = global.qaQueueLen ?? 0;
+   global.vectorQueueLen = global.vectorQueueLen ?? 0;
+   global.hypeQueueLen = global.hypeQueueLen ?? 0;
++  global.small2bigQueueLen = global.small2bigQueueLen ?? 0;
+   initHttpAgent();
+   initPlusRequest();
+ }
+diff --git a/projects/app/src/service/core/dataset/queues/generateSmall2Big.ts b/projects/app/src/service/core/dataset/queues/generateSmall2Big.ts
+new file mode 100644
+index 000000000..857a0d1bb
+--- /dev/null
++++ b/projects/app/src/service/core/dataset/queues/generateSmall2Big.ts
+@@ -0,0 +1,276 @@
++/**
++ * Small2Big 索引增强线程处理器
++ *
++ * 处理流程：
++ * 1. 从 MongoDatasetTraining 队列获取 small2big 任务
++ * 2. 对 Answer 文本进行分块
++ * 3. 将子块作为索引追加到原 chunk
++ * 4. 重新 push 到 chunk 队列进行向量化
++ *
++ * 参考：autoTrainingProcess.ts
++ */
++
++import { MongoDatasetTraining } from '@fastgpt/service/core/dataset/training/schema';
++import { TrainingModeEnum } from '@fastgpt/global/core/dataset/constants';
++import { DatasetDataIndexTypeEnum } from '@fastgpt/global/core/dataset/data/constants';
++import { addLog } from '@fastgpt/service/common/system/log';
++import { addMinutes } from 'date-fns';
++import { getErrText } from '@fastgpt/global/common/error/utils';
++import { delay } from '@fastgpt/service/common/bullmq';
++import type { DatasetTrainingSchemaType } from '@fastgpt/global/core/dataset/type';
++import { pushDataListToTrainingQueue } from '@fastgpt/service/core/dataset/training/controller';
++import { mongoSessionRun } from '@fastgpt/service/common/mongo/sessionRun';
++import { text2Chunks } from '@fastgpt/service/worker/function';
++import { getTrainingModeByCollection } from '@fastgpt/service/core/dataset/collection/utils';
++import { DatasetCollectionDataProcessModeEnum } from '@fastgpt/global/core/dataset/constants';
++
++const reduceQueue = () => {
++  global.small2bigQueueLen = global.small2bigQueueLen > 0 ? global.small2bigQueueLen - 1 : 0;
++  return global.small2bigQueueLen === 0;
++};
++
++type PopulateType = {
++  dataset: { vectorModel: string; agentModel: string; vlmModel: string };
++  collection: {
++    small2bigChunkSize?: number;
++    small2bigMaxChildChunks?: number;
++    indexSize?: number;
++    autoIndexes?: boolean;
++  };
++};
++
++type TrainingDataType = DatasetTrainingSchemaType & PopulateType;
++
++// Truncate Answer chunks
++const chunkAnswerText = async ({
++  answerText,
++  chunkSize = 500,
++  maxChildChunks = 10
++}: {
++  answerText: string;
++  chunkSize: number;
++  maxChildChunks: number;
++}): Promise<string[]> => {
++  if (!answerText || answerText.trim().length === 0) {
++    return [];
++  }
++
++  // while Answer.length < chunkSize * 1.5, Truncate will generate useless chunk
++  if (answerText.length <= chunkSize * 1.5) {
++    return [];
++  }
++
++  try {
++    const { chunks } = await text2Chunks({
++      text: answerText,
++      chunkSize: chunkSize,
++      overlapRatio: 0.1
++    });
++
++    // Limit the maximum number of sub-blocks to avoid excessive Answer length and storage pressure
++    const limitedChunks = chunks.slice(0, maxChildChunks);
++
++    if (limitedChunks.length < chunks.length) {
++      addLog.warn(`[Small2Big] Truncated chunks from ${chunks.length} to ${maxChildChunks}`);
++    }
++
++    return limitedChunks.length > 1 ? limitedChunks : [];
++  } catch (error) {
++    addLog.error(`[Small2Big] Error chunking answer:`, error);
++    return [];
++  }
++};
++
++const processSmall2BigTask = async (data: TrainingDataType) => {
++  try {
++    const answerText = data.a;
++
++    // 1. 验证 Answer 文本
++    if (!answerText || answerText.trim().length === 0) {
++      addLog.info(`[Small2Big Queue] Empty answer, converting to chunk mode`);
++
++      // 直接转为 chunk 模式
++      await mongoSessionRun(async (session) => {
++        await MongoDatasetTraining.updateOne(
++          { _id: data._id },
++          {
++            $set: {
++              mode: TrainingModeEnum.chunk,
++              lockTime: new Date('2000/1/1')
++            }
++          },
++          { session }
++        );
++      });
++      return;
++    }
++
++    // split
++    const chunkSize = data.collection?.small2bigChunkSize || 500;
++    const maxChildChunks = data.collection?.small2bigMaxChildChunks || 10;
++
++    const childChunks = await chunkAnswerText({
++      answerText,
++      chunkSize,
++      maxChildChunks
++    });
++
++    // Change Mode if chunk less than 1.5 * chunkSize , No index gen
++    if (childChunks.length === 0) {
++      addLog.debug(
++        `[Small2Big Queue] Answer too short for chunking (${answerText.length} chars), converting to chunk mode`
++      );
++
++      await mongoSessionRun(async (session) => {
++        await MongoDatasetTraining.updateOne(
++          { _id: data._id },
++          {
++            $set: {
++              mode: TrainingModeEnum.chunk,
++              lockTime: new Date('2000/1/1')
++            }
++          },
++          { session }
++        );
++      });
++      return;
++    }
++
++    addLog.info(
++      `[Small2Big Queue] Generated ${childChunks.length} child chunks for chunk ${data.chunkIndex} (answer length: ${answerText.length})`
++    );
++
++    const originalIndexes = data.indexes || [];
++    const small2bigIndexes = childChunks.map((text) => ({
++      type: DatasetDataIndexTypeEnum.small2big,
++      text
++    }));
++    const allIndexes = [...originalIndexes, ...small2bigIndexes];
++
++    await mongoSessionRun(async (session) => {
++      await MongoDatasetTraining.deleteOne({ _id: data._id }, { session });
++
++      const nextMode = getTrainingModeByCollection({
++        trainingType: DatasetCollectionDataProcessModeEnum.template,
++        autoIndexes: data.collection?.autoIndexes,
++        imageIndex: false,
++        small2bigIndexes: false
++      });
++
++      // 创建下一阶段任务（auto 或 chunk）
++      await pushDataListToTrainingQueue({
++        teamId: data.teamId,
++        tmbId: data.tmbId,
++        datasetId: data.datasetId,
++        collectionId: data.collectionId,
++        agentModel: data.dataset.agentModel,
++        vectorModel: data.dataset.vectorModel,
++        vlmModel: data.dataset.vlmModel,
++        indexSize: data.collection.indexSize,
++        mode: nextMode,
++        billId: data.billId,
++        data: [
++          {
++            q: data.q,
++            a: data.a,
++            indexes: allIndexes,
++            chunkIndex: data.chunkIndex
++          }
++        ],
++        session
++      });
++
++      addLog.info(
++        `[Small2Big Queue] Successfully processed chunk ${data.chunkIndex} with ${small2bigIndexes.length} small2big indexes, next mode: ${nextMode}`
++      );
++    });
++  } catch (error) {
++    addLog.error(`[Small2Big Queue] Error processing task`, error);
++
++    await MongoDatasetTraining.updateOne(
++      { _id: data._id },
++      {
++        $inc: { retryCount: -1 },
++        errorMsg: getErrText(error, 'Small2Big processing error'),
++        lockTime: new Date('2000/1/1')
++      }
++    );
++  }
++};
++
++export async function generateSmall2Big(): Promise<any> {
++  addLog.debug(`[Small2Big Training Queue] Size: ${global.small2bigQueueLen}`);
++
++  const max = global.systemEnv?.qaMaxProcess || 10;
++  if (global.small2bigQueueLen >= max) return;
++  global.small2bigQueueLen++;
++
++  try {
++    while (true) {
++      const {
++        data,
++        done = false,
++        error = false
++      } = await (async () => {
++        try {
++          const data = await MongoDatasetTraining.findOneAndUpdate(
++            {
++              mode: TrainingModeEnum.small2big,
++              retryCount: { $gt: 0 },
++              lockTime: { $lte: addMinutes(new Date(), -3) }
++            },
++            {
++              lockTime: new Date(),
++              $inc: { retryCount: -1 }
++            }
++          )
++            .populate<PopulateType>([
++              {
++                path: 'dataset',
++                select: 'vectorModel agentModel vlmModel'
++              },
++              {
++                path: 'collection',
++                select: 'small2bigChunkSize small2bigMaxChildChunks indexSize autoIndexes'
++              }
++            ])
++            .lean();
++
++          if (!data) {
++            return { done: true };
++          }
++          return { data };
++        } catch (error) {
++          return { error: true };
++        }
++      })();
++
++      // Break loop
++      if (done || !data) {
++        break;
++      }
++      if (error) {
++        addLog.error(`[Small2Big Queue] Error`, error);
++        await delay(500);
++        continue;
++      }
++
++      if (!data.dataset || !data.collection) {
++        addLog.warn(`[Small2Big Queue] Dataset or collection not found`, data);
++        await MongoDatasetTraining.deleteOne({ _id: data._id });
++        continue;
++      }
++
++      addLog.debug(`[Small2Big Queue] Processing chunk: ${data.chunkIndex}`);
++      await processSmall2BigTask(data);
++      await delay(100);
++    }
++  } catch (error) {
++    addLog.error(`[Small2Big Queue] Error`, error);
++  }
++
++  if (reduceQueue()) {
++    addLog.info(`[Small2Big Queue] Done`);
++  }
++  addLog.debug(`[Small2Big Queue] break loop, current queue size: ${global.small2bigQueueLen}`);
++}
+diff --git a/projects/app/src/service/core/dataset/training/utils.ts b/projects/app/src/service/core/dataset/training/utils.ts
+index 206fc13f7..76ac8f567 100644
+--- a/projects/app/src/service/core/dataset/training/utils.ts
++++ b/projects/app/src/service/core/dataset/training/utils.ts
+@@ -5,6 +5,7 @@ import { TrainingModeEnum } from '@fastgpt/global/core/dataset/constants';
+ import { type DatasetTrainingSchemaType } from '@fastgpt/global/core/dataset/type';
+ import { MongoDatasetTraining } from '@fastgpt/service/core/dataset/training/schema';
+ import { datasetParseQueue } from '../queues/datasetParse';
++import { generateSmall2Big } from '../queues/generateSmall2Big';
+ 
+ export const createDatasetTrainingMongoWatch = () => {
+   const changeStream = MongoDatasetTraining.watch();
+@@ -22,6 +23,8 @@ export const createDatasetTrainingMongoWatch = () => {
+           datasetParseQueue();
+         } else if (mode === TrainingModeEnum.databaseSchema) {
+           generateDatabaseSchemaEmbedding();
++        } else if (mode === TrainingModeEnum.small2big) {
++          generateSmall2Big();
+         }
+       }
+     } catch (error) {}
+@@ -36,5 +39,6 @@ export const startTrainingQueue = (fast?: boolean) => {
+     generateVector();
+     datasetParseQueue();
+     generateDatabaseSchemaEmbedding();
++    generateSmall2Big();
+   }
+ };
+diff --git a/projects/app/src/types/index.d.ts b/projects/app/src/types/index.d.ts
+index 8d37202db..09514bb9d 100644
+--- a/projects/app/src/types/index.d.ts
++++ b/projects/app/src/types/index.d.ts
+@@ -15,6 +15,7 @@ declare global {
+   var qaQueueLen: number;
+   var vectorQueueLen: number;
+   var hypeQueueLen: number;
++  var small2bigQueueLen: number;
+ 
+   interface Window {
+     grecaptcha: any;
+-- 
+2.39.5 (Apple Git-154)
+
