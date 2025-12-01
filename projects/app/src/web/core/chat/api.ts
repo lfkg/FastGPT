@@ -34,6 +34,7 @@ import type {
   GetCollectionQuoteProps,
   GetCollectionQuoteRes
 } from '@/pages/api/core/chat/quote/getCollectionQuote';
+import type { GetSqlQuoteProps, GetSqlQuoteRes } from '@/pages/api/core/chat/quote/getSqlQuote';
 
 /**
  * 获取初始化聊天内容
@@ -110,6 +111,9 @@ export const getQuoteDataList = (data: GetQuoteProps) =>
 
 export const getCollectionQuote = (data: GetCollectionQuoteProps) =>
   POST<GetCollectionQuoteRes>(`/core/chat/quote/getCollectionQuote`, data);
+
+export const getSqlQuote = (data: GetSqlQuoteProps) =>
+  POST<GetSqlQuoteRes>(`/core/chat/quote/getSqlQuote`, data);
 
 /*---------- chat setting ------------*/
 export const getChatSetting = () => {

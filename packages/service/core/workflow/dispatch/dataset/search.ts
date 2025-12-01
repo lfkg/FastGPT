@@ -185,13 +185,14 @@ export async function dispatchDatasetSearch(
 
     const convertSqlResultsToChunks = async (
       singleSQLResult: SqlGenerationResponse,
-      datasetId: string
+      datasetId: string,
+      datasetType: string
     ): Promise<SearchDataResponseItemType> => {
       const sourceName =
         (await MongoDataset.findById(datasetId, 'name')
           .lean()
           ?.then((doc) => doc?.name)) || 'Unknown Dataset';
-      const uuid = `sql_quote_${datasetId}`;
+      const uuid = `${datasetType}_quote_${datasetId}`;
       return {
         id: uuid,
         updateTime: new Date(),
@@ -224,7 +225,7 @@ export async function dispatchDatasetSearch(
       await Promise.all(
         databaseDatasetIds.map(async (datasetId) => {
           const datasetDetail = datasetDetails.find((d) => String(d?._id) === datasetId);
-          const datasetType = datasetDetail?.type;
+          const datasetType = datasetDetail?.type || 'unknown_dataset';
 
           // Common SQL generation config
           const key = sqlLLM.requestAuth || undefined;
@@ -311,7 +312,9 @@ export async function dispatchDatasetSearch(
               datasetId
             } as SqlResultWithDatasetId);
             // convertSqlResultsToChunks
-            searchRes.push(await convertSqlResultsToChunks(singleSqlResult, datasetId));
+            searchRes.push(
+              await convertSqlResultsToChunks(singleSqlResult, datasetId, datasetType)
+            );
           } else {
             addLog.warn('Dataset Search - SQL Generation Failed', { datasetId, datasetType });
           }
@@ -376,13 +379,13 @@ export async function dispatchDatasetSearch(
     // count bill results
     const nodeDispatchUsages: ChatNodeUsageType[] = [];
     // vector
-    const { totalPoints: embeddingTotalPoints, modelName: embeddingModelName } =
-      formatModelChars2Points({
-        model: vectorModel!.model,
-        inputTokens: embeddingTokens,
-        modelType: ModelTypeEnum.embedding
-      });
     if (vectorModel) {
+      const { totalPoints: embeddingTotalPoints, modelName: embeddingModelName } =
+        formatModelChars2Points({
+          model: vectorModel!.model,
+          inputTokens: embeddingTokens,
+          modelType: ModelTypeEnum.embedding
+        });
       nodeDispatchUsages.push({
         totalPoints: embeddingTotalPoints,
         moduleName: node.name,
@@ -459,7 +462,7 @@ export async function dispatchDatasetSearch(
         let totalSqlPoints = 0;
         sqlResult.forEach((result) => {
           const { totalPoints, modelName } = formatModelChars2Points({
-            model: vectorModel!.model, // Use the same model as vector search
+            model: generateSqlModel!,
             inputTokens: result.input_tokens,
             outputTokens: result.output_tokens,
             modelType: ModelTypeEnum.llm

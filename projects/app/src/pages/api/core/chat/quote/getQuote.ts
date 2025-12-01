@@ -8,8 +8,8 @@ import { ChatErrEnum } from '@fastgpt/global/common/error/code/chat';
 import { getFormatDatasetCiteList } from '@fastgpt/service/core/dataset/data/controller';
 import type { DatasetCiteItemType } from '@fastgpt/global/core/dataset/type';
 import { FlowNodeTypeEnum } from '@fastgpt/global/core/workflow/node/constant';
-import { chunk } from 'lodash';
 import { MongoDataset } from '@fastgpt/service/core/dataset/schema';
+import { DatasetTypeEnum } from '@fastgpt/global/core/dataset/constants';
 export type GetQuoteProps = {
   datasetDataIdList: string[];
 
@@ -40,7 +40,13 @@ async function handler(req: ApiRequestProps<GetQuoteProps>): Promise<GetQuotesRe
     datasetDataIdList
   } = req.body;
   let filterCollectionIdList = collectionIdList.filter((id) => id?.trim());
-  let filterdatasetDataIdList = datasetDataIdList.filter((id) => !id?.startsWith('sql'));
+  // Filter out SQL-generated virtual IDs (database and structureDocument types)
+  let filterDatasetDataIdList = datasetDataIdList.filter(
+    (id) =>
+      id &&
+      !id.startsWith(DatasetTypeEnum.database) &&
+      !id.startsWith(DatasetTypeEnum.structureDocument)
+  );
   const [{ chat, responseDetail }, { chatItem }] = await Promise.all([
     authChatCrud({
       req,
@@ -57,7 +63,7 @@ async function handler(req: ApiRequestProps<GetQuoteProps>): Promise<GetQuotesRe
   if (!chat || !responseDetail) return Promise.reject(ChatErrEnum.unAuthChat);
 
   const list = await MongoDatasetData.find(
-    { _id: { $in: filterdatasetDataIdList }, collectionId: { $in: filterCollectionIdList } },
+    { _id: { $in: filterDatasetDataIdList }, collectionId: { $in: filterCollectionIdList } },
     quoteDataFieldSelector
   ).lean();
 
@@ -81,7 +87,7 @@ async function handler(req: ApiRequestProps<GetQuoteProps>): Promise<GetQuotesRe
       const qInfo = sqlQuoteLists?.find((e) => e?.datasetId === res?.datasetId);
       const uInfo = updateInfo.find((d) => d._id === res?.datasetId);
       return {
-        _id: qInfo?.id || `sql_quote_${res?.datasetId}`,
+        _id: qInfo?.id || `unknown_dataset_${res?.datasetId}`,
         q: res?.answer || '',
         a: res?.sql || '',
         updateTime: uInfo?.updateTime || chatItem.time
