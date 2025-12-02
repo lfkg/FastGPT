@@ -213,8 +213,8 @@ export type PreviewDataQuery = {
 export type PreviewDataResponse = {
   cols: string[];
   data: Array<Array<any>>;
-  rows?: number;
-  totalCols?: number;
+  rowCount: number;
+  columnCount: number;
 };
 
 /*-------SQL Query Types-------*/

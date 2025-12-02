@@ -49,8 +49,8 @@ async function handler(req: NextApiRequest): Promise<PreviewDataResponse> {
   return {
     cols,
     data,
-    ...(rowCount !== undefined ? { rowCount } : {}),
-    ...(columnCount !== undefined ? { columnCount } : {})
+    rowCount: rowCount,
+    columnCount: columnCount
   };
 }
 
