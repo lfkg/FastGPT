@@ -7,6 +7,8 @@ import { sqlQuery } from '@fastgpt/service/core/dataset/database/dative/client/d
 import type { PreviewDataResponse } from '@fastgpt/global/core/dataset/database/api';
 import { DatasetCollectionTypeEnum } from '@fastgpt/global/core/dataset/constants';
 import { getDuckDBStoreConfig } from '@fastgpt/service/core/dataset/database/dative/utils';
+import { getFileById } from '@fastgpt/service/common/file/gridfs/controller';
+import { BucketNameEnum } from '@fastgpt/global/common/file/constants';
 
 async function handler(req: NextApiRequest): Promise<PreviewDataResponse> {
   // Extract collectionId from query or body
@@ -30,8 +32,22 @@ async function handler(req: NextApiRequest): Promise<PreviewDataResponse> {
     return Promise.reject(new Error('Invalid collection type, expected file type'));
   }
 
-  // Build SQL query
-  const filename = collection.name;
+  // Get original filename from dataset.files
+  if (!collection.fileId) {
+    return Promise.reject(new Error('File ID is missing in collection'));
+  }
+
+  const file = await getFileById({
+    bucketName: BucketNameEnum.dataset,
+    fileId: collection.fileId
+  });
+
+  if (!file || !file.filename) {
+    return Promise.reject(new Error('Original filename not found'));
+  }
+
+  // Build SQL query using original filename
+  const filename = file.filename;
   const sql = `SELECT * FROM "${filename.split('.')[0]}" LIMIT 20`;
 
   // Call Dative SQL query interface
